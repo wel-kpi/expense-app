@@ -173,6 +173,7 @@
       const fields = OCR.extractFields(text);
       if (fields.payee && !$('fieldPayee').value) $('fieldPayee').value = fields.payee;
       if (fields.amount != null && !$('fieldAmount').value) $('fieldAmount').value = fields.amount;
+      if (fields.regNo && !$('fieldRegNo').value) $('fieldRegNo').value = fields.regNo;
       statusEl.textContent = '読み取り完了。内容を確認・修正してください。';
     } catch (err) {
       console.error(err);
