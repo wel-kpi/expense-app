@@ -68,6 +68,16 @@ const ExpenseDB = {
     });
   },
 
+  async getAll() {
+    const db = await openDb();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE_EXPENSES, 'readonly');
+      const req = tx.objectStore(STORE_EXPENSES).getAll();
+      req.onsuccess = () => resolve(req.result || []);
+      req.onerror = () => reject(req.error);
+    });
+  },
+
   async getAllMonths() {
     const db = await openDb();
     return new Promise((resolve, reject) => {

@@ -14,6 +14,8 @@
     <span id="appVersion" class="text-white-50 small ms-1"></span>
     <div class="d-flex align-items-center gap-2">
       <select id="monthSelect" class="form-select form-select-sm" style="width:auto;"></select>
+      <button id="syncPullBtn" class="btn btn-sm btn-outline-light" title="サーバーから取得">⬇</button>
+      <button id="syncPushBtn" class="btn btn-sm btn-outline-light" title="サーバーへ送信">⬆</button>
       <button id="settingsBtn" class="btn btn-sm btn-outline-light" title="設定">⚙</button>
     </div>
   </div>
@@ -156,6 +158,15 @@
         <input type="text" class="form-control" id="settingEmployeeCode" placeholder="任意">
         <label class="form-label mt-3">会社名</label>
         <input type="text" class="form-control" id="settingCompanyName" placeholder="WELNAC 株式会社">
+
+        <hr class="mt-4">
+        <h6>他端末との同期（Google Apps Script）</h6>
+        <p class="form-text mt-0">google-apps-script/Code.gs をデプロイして発行されたウェブアプリのURLと、
+          スクリプトプロパティに設定した合言葉（SYNC_TOKEN）を入力してください。</p>
+        <label class="form-label">ウェブアプリURL</label>
+        <input type="url" class="form-control" id="settingSyncUrl" placeholder="https://script.google.com/macros/s/.../exec">
+        <label class="form-label mt-3">同期トークン</label>
+        <input type="text" class="form-control" id="settingSyncToken" placeholder="合言葉">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" id="saveSettingsBtn">保存</button>
@@ -183,6 +194,7 @@
 <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 <script src="./version.js"></script>
 <script src="./db.js"></script>
+<script src="./sync.js"></script>
 <script src="./ocr.js"></script>
 <script src="./excel.js"></script>
 <script src="./app.js"></script>

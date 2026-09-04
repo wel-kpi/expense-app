@@ -376,6 +376,8 @@
     $('settingFullName').value = await ExpenseDB.getSetting('fullName', '');
     $('settingEmployeeCode').value = await ExpenseDB.getSetting('employeeCode', '');
     $('settingCompanyName').value = await ExpenseDB.getSetting('companyName', '');
+    $('settingSyncUrl').value = await ExpenseDB.getSetting('syncUrl', '');
+    $('settingSyncToken').value = await ExpenseDB.getSetting('syncToken', '');
     settingsModal.show();
   });
 
@@ -384,8 +386,49 @@
     await ExpenseDB.setSetting('fullName', $('settingFullName').value.trim());
     await ExpenseDB.setSetting('employeeCode', $('settingEmployeeCode').value.trim());
     await ExpenseDB.setSetting('companyName', $('settingCompanyName').value.trim());
+    await ExpenseDB.setSetting('syncUrl', $('settingSyncUrl').value.trim());
+    await ExpenseDB.setSetting('syncToken', $('settingSyncToken').value.trim());
     settingsModal.hide();
     toast('設定を保存しました');
+  });
+
+  async function getSyncConfig() {
+    const syncUrl = await ExpenseDB.getSetting('syncUrl', '');
+    const syncToken = await ExpenseDB.getSetting('syncToken', '');
+    if (!syncUrl || !syncToken) {
+      toast('設定（⚙）で同期用のURLとトークンを入力してください', 'warning');
+      settingsModal.show();
+      return null;
+    }
+    return { syncUrl, syncToken };
+  }
+
+  $('syncPushBtn').addEventListener('click', async () => {
+    const config = await getSyncConfig();
+    if (!config) return;
+    toast('サーバーへ送信中...', 'info');
+    try {
+      const result = await Sync.push(config.syncUrl, config.syncToken);
+      toast(`${result.count}件送信しました`, 'success');
+    } catch (err) {
+      console.error(err);
+      toast('送信に失敗しました: ' + err.message, 'danger');
+    }
+  });
+
+  $('syncPullBtn').addEventListener('click', async () => {
+    const config = await getSyncConfig();
+    if (!config) return;
+    toast('サーバーから取得中...', 'info');
+    try {
+      const result = await Sync.pull(config.syncUrl, config.syncToken);
+      toast(`${(result.expenses || []).length}件取得しました`, 'success');
+      await populateMonthSelect();
+      await renderAll();
+    } catch (err) {
+      console.error(err);
+      toast('取得に失敗しました: ' + err.message, 'danger');
+    }
   });
 
   function renderVersion() {
