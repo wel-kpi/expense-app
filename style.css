@@ -1,0 +1,25 @@
+body {
+  background: #f5f6f8;
+  padding-bottom: 2rem;
+}
+
+.receipt-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid #ddd;
+}
+
+#receiptPreview {
+  cursor: zoom-in;
+}
+
+@media (max-width: 576px) {
+  #expenseTable th,
+  #expenseTable td {
+    font-size: 0.85rem;
+    padding: 0.4rem;
+  }
+}
