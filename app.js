@@ -381,7 +381,15 @@
     toast('設定を保存しました');
   });
 
+  function renderVersion() {
+    const v = window.APP_VERSION;
+    if (!v) return;
+    $('appVersion').textContent = v.date ? `v${v.sha}` : '(開発版)';
+    $('appVersion').title = v.date ? `deployed: ${v.date}` : 'local development build';
+  }
+
   (async function init() {
+    renderVersion();
     await populateMonthSelect();
     await renderAll();
   })();
