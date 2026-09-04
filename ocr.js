@@ -10,31 +10,58 @@ const OCR = {
   },
 
   // Heuristic extraction of 支払先(payee)・支払額(amount)・登録番号(regNo) from raw OCR text.
+  // 1枚の画像に複数の領収書が並んでいる場合は、検出できた件数分の配列を返す。
   extractFields(text) {
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    return this.extractMultiple(text)[0] || { payee: '', amount: null, regNo: '' };
+  },
 
-    const transit = this.extractTransitUsage(lines);
-    if (transit) return { ...transit, regNo: '' };
+  extractMultiple(text) {
+    const allLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
-    return {
+    const transit = this.extractTransitUsage(allLines);
+    if (transit) return [{ ...transit, regNo: '' }];
+
+    const groups = this.splitReceipts(allLines);
+    const results = groups.map((lines) => ({
       payee: this.extractPayee(lines),
       amount: this.extractAmount(lines),
       regNo: this.extractRegNo(lines),
-    };
+    }));
+    const filtered = results.filter((r) => r.payee || r.amount != null);
+    return filtered.length > 0 ? filtered : results.slice(0, 1);
+  },
+
+  // 「領収書」「領収証」の見出しが複数回出てくる場合、そこを境目として
+  // 1枚の写真に写った複数枚の領収書をそれぞれ別のブロックに分割する。
+  splitReceipts(lines) {
+    const headerPattern = /^(領収書|領収証)/;
+    const groups = [];
+    let current = [];
+    for (const line of lines) {
+      if (headerPattern.test(line) && current.length > 0) {
+        groups.push(current);
+        current = [];
+      }
+      current.push(line);
+    }
+    if (current.length) groups.push(current);
+    return groups.length > 1 ? groups : [lines];
   },
 
   // PASMO/Suica等の利用履歴（残高＋乗車ごとの +/- 差額）を検出し、
   // マイナス（乗車による減算）だけを合計する。チャージ（+）は経費ではないため除外。
+  // 実機のOCRでは「入/出の駅名 ¥残高 -454」のように1行にまとまって出力されることが多いため、
+  // 行全体の一致ではなく、テキスト全体から孤立した +/-数字を探す（前後が数字・カンマでないことを条件に、
+  // 電話番号やIDのハイフンなど数字に挟まれた「-」を誤検出しないようにする）。
   extractTransitUsage(lines) {
-    const deltaPattern = /^[+\-－−]\s?([0-9][0-9,]{1,6})$/;
+    const text = lines.join(' ');
+    const deltaPattern = /(?<![0-9,])([+\-－−])\s?([0-9][0-9,]{1,6})(?![0-9,])/g;
     const negatives = [];
 
-    for (const line of lines) {
-      const m = line.match(deltaPattern);
-      if (!m) continue;
-      const value = parseInt(m[1].replace(/,/g, ''), 10);
+    for (const m of text.matchAll(deltaPattern)) {
+      const value = parseInt(m[2].replace(/,/g, ''), 10);
       if (isNaN(value)) continue;
-      if (line[0] !== '+') negatives.push(value);
+      if (m[1] !== '+') negatives.push(value);
     }
 
     // 乗車による減算が複数見つかった場合のみ「履歴形式」と判断する（誤検出防止）。

@@ -120,6 +120,45 @@
     $('ocrStatus').textContent = '';
     pendingReceiptImage = null;
     $('fieldDate').value = new Date().toISOString().slice(0, 10);
+    clearMultiReceiptPanel();
+  }
+
+  function guessCategory(payee) {
+    return /タクシー|交通|バス|駅|PASMO|Suica|ハイヤー|運輸/.test(payee || '') ? '交通費' : 'その他';
+  }
+
+  function renderMultiReceiptPanel(results) {
+    const rows = results.map((r) => {
+      const guessed = guessCategory(r.payee);
+      const options = CATEGORIES.map(
+        (c) => `<option value="${c}" ${c === guessed ? 'selected' : ''}>${c}</option>`
+      ).join('');
+      return `
+        <div class="row g-2 align-items-end border-bottom pb-2 mb-2" data-reg-no="${escapeHtml(r.regNo || '')}">
+          <div class="col-auto pb-2">
+            <input type="checkbox" class="form-check-input multi-include" checked>
+          </div>
+          <div class="col-4">
+            <label class="form-label small mb-0">支払先</label>
+            <input type="text" class="form-control form-control-sm multi-payee" value="${escapeHtml(r.payee || '')}">
+          </div>
+          <div class="col-3">
+            <label class="form-label small mb-0">支払額</label>
+            <input type="number" class="form-control form-control-sm multi-amount" value="${r.amount ?? ''}">
+          </div>
+          <div class="col-4">
+            <label class="form-label small mb-0">内容</label>
+            <select class="form-select form-select-sm multi-category">${options}</select>
+          </div>
+        </div>`;
+    }).join('');
+    $('multiReceiptRows').innerHTML = rows;
+    $('multiReceiptSection').classList.remove('d-none');
+  }
+
+  function clearMultiReceiptPanel() {
+    $('multiReceiptRows').innerHTML = '';
+    $('multiReceiptSection').classList.add('d-none');
   }
 
   function openAddModal() {
@@ -170,15 +209,62 @@
       const text = await OCR.recognize(dataUrl, (pct) => {
         statusEl.textContent = `OCR読み取り中... ${pct}%`;
       });
-      const fields = OCR.extractFields(text);
-      if (fields.payee && !$('fieldPayee').value) $('fieldPayee').value = fields.payee;
-      if (fields.amount != null && !$('fieldAmount').value) $('fieldAmount').value = fields.amount;
-      if (fields.regNo && !$('fieldRegNo').value) $('fieldRegNo').value = fields.regNo;
-      statusEl.textContent = '読み取り完了。内容を確認・修正してください。';
+      const results = OCR.extractMultiple(text);
+      if (results.length === 0) {
+        statusEl.textContent = '読み取れませんでした（手動で入力してください）。';
+        clearMultiReceiptPanel();
+      } else if (results.length === 1) {
+        const fields = results[0];
+        if (fields.payee && !$('fieldPayee').value) $('fieldPayee').value = fields.payee;
+        if (fields.amount != null && !$('fieldAmount').value) $('fieldAmount').value = fields.amount;
+        if (fields.regNo && !$('fieldRegNo').value) $('fieldRegNo').value = fields.regNo;
+        statusEl.textContent = '読み取り完了。内容を確認・修正してください。';
+        clearMultiReceiptPanel();
+      } else {
+        statusEl.textContent = `この画像から${results.length}件の領収書を検出しました。下の一覧を確認し「まとめて登録」してください。`;
+        renderMultiReceiptPanel(results);
+      }
     } catch (err) {
       console.error(err);
       statusEl.textContent = 'OCR読み取りに失敗しました（手動で入力してください）。';
     }
+  });
+
+  $('multiSaveBtn').addEventListener('click', async () => {
+    const date = $('fieldDate').value || new Date().toISOString().slice(0, 10);
+    const purpose = $('fieldPurpose').value.trim();
+    const rows = document.querySelectorAll('#multiReceiptRows > div');
+    let count = 0;
+    for (const row of rows) {
+      if (!row.querySelector('.multi-include').checked) continue;
+      const payee = row.querySelector('.multi-payee').value.trim();
+      const amount = Number(row.querySelector('.multi-amount').value);
+      const category = row.querySelector('.multi-category').value;
+      if (!payee || !amount) continue;
+      await ExpenseDB.add({
+        date,
+        payee,
+        category,
+        purpose,
+        amount,
+        regNo: row.dataset.regNo || '',
+        attendees: null,
+        receiptImage: pendingReceiptImage,
+      });
+      count++;
+    }
+    if (count === 0) {
+      toast('登録する領収書がありません（支払先・支払額を確認してください）', 'warning');
+      return;
+    }
+    toast(`${count}件登録しました`);
+    expenseModal.hide();
+    const savedMonth = date.slice(0, 7);
+    if (savedMonth !== currentMonth) {
+      currentMonth = savedMonth;
+      await populateMonthSelect();
+    }
+    await renderAll();
   });
 
   $('receiptPreview').addEventListener('click', () => {
