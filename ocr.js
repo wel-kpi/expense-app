@@ -9,26 +9,47 @@ const OCR = {
     return result.data.text;
   },
 
-  // Heuristic extraction of 支払先(payee)・支払額(amount)・登録番号(regNo) from raw OCR text.
+  // Heuristic extraction of 支払日(date)・支払先(payee)・支払額(amount)・登録番号(regNo) from raw OCR text.
   // 1枚の画像に複数の領収書が並んでいる場合は、検出できた件数分の配列を返す。
   extractFields(text) {
-    return this.extractMultiple(text)[0] || { payee: '', amount: null, regNo: '' };
+    return this.extractMultiple(text)[0] || { date: '', payee: '', amount: null, regNo: '' };
   },
 
   extractMultiple(text) {
     const allLines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
     const transit = this.extractTransitUsage(allLines);
-    if (transit) return [{ ...transit, regNo: '' }];
+    if (transit) return [{ ...transit, regNo: '', date: this.extractDate(allLines) }];
 
     const groups = this.splitReceipts(allLines);
     const results = groups.map((lines) => ({
+      date: this.extractDate(lines),
       payee: this.extractPayee(lines),
       amount: this.extractAmount(lines),
       regNo: this.extractRegNo(lines),
     }));
     const filtered = results.filter((r) => r.payee || r.amount != null);
     return filtered.length > 0 ? filtered : results.slice(0, 1);
+  },
+
+  // 領収書に印字された日付を YYYY-MM-DD 形式で返す（見つからない場合は空文字）。
+  // 「2026年08月19日」「2026/08/19」のような年月日つきを優先し、
+  // 年が無い「08/27」（交通系ICカード履歴など）は現在の年を補って扱う。
+  extractDate(lines) {
+    const text = lines.join(' ');
+    let m = text.match(/(20[0-9]{2})[年/-]\s*([0-9]{1,2})[月/-]\s*([0-9]{1,2})日?/);
+    if (m) {
+      const [, y, mo, d] = m;
+      return `${y}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    // 年が省略された "MM/DD" 形式（スラッシュのみ。ハイフンは電話番号等と紛らわしいため対象外）。
+    m = text.match(/(?<![0-9])([0-9]{1,2})\/([0-9]{1,2})(?![0-9])/);
+    if (m) {
+      const [, mo, d] = m;
+      const year = new Date().getFullYear();
+      return `${year}-${mo.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    return '';
   },
 
   // 「領収書」「領収証」の見出しが複数回出てくる場合、そこを境目として

@@ -128,6 +128,7 @@
   }
 
   function renderMultiReceiptPanel(results) {
+    const fallbackDate = $('fieldDate').value || new Date().toISOString().slice(0, 10);
     const rows = results.map((r) => {
       const guessed = guessCategory(r.payee);
       const options = CATEGORIES.map(
@@ -138,15 +139,19 @@
           <div class="col-auto pb-2">
             <input type="checkbox" class="form-check-input multi-include" checked>
           </div>
-          <div class="col-4">
+          <div class="col-3">
+            <label class="form-label small mb-0">支払日</label>
+            <input type="date" class="form-control form-control-sm multi-date" value="${r.date || fallbackDate}">
+          </div>
+          <div class="col-3">
             <label class="form-label small mb-0">支払先</label>
             <input type="text" class="form-control form-control-sm multi-payee" value="${escapeHtml(r.payee || '')}">
           </div>
-          <div class="col-3">
+          <div class="col-2">
             <label class="form-label small mb-0">支払額</label>
             <input type="number" class="form-control form-control-sm multi-amount" value="${r.amount ?? ''}">
           </div>
-          <div class="col-4">
+          <div class="col-3">
             <label class="form-label small mb-0">内容</label>
             <select class="form-select form-select-sm multi-category">${options}</select>
           </div>
@@ -215,6 +220,7 @@
         clearMultiReceiptPanel();
       } else if (results.length === 1) {
         const fields = results[0];
+        if (fields.date) $('fieldDate').value = fields.date;
         if (fields.payee && !$('fieldPayee').value) $('fieldPayee').value = fields.payee;
         if (fields.amount != null && !$('fieldAmount').value) $('fieldAmount').value = fields.amount;
         if (fields.regNo && !$('fieldRegNo').value) $('fieldRegNo').value = fields.regNo;
@@ -231,12 +237,13 @@
   });
 
   $('multiSaveBtn').addEventListener('click', async () => {
-    const date = $('fieldDate').value || new Date().toISOString().slice(0, 10);
+    const fallbackDate = $('fieldDate').value || new Date().toISOString().slice(0, 10);
     const purpose = $('fieldPurpose').value.trim();
     const rows = document.querySelectorAll('#multiReceiptRows > div');
     let count = 0;
     for (const row of rows) {
       if (!row.querySelector('.multi-include').checked) continue;
+      const date = row.querySelector('.multi-date').value || fallbackDate;
       const payee = row.querySelector('.multi-payee').value.trim();
       const amount = Number(row.querySelector('.multi-amount').value);
       const category = row.querySelector('.multi-category').value;
@@ -259,7 +266,7 @@
     }
     toast(`${count}件登録しました`);
     expenseModal.hide();
-    const savedMonth = date.slice(0, 7);
+    const savedMonth = fallbackDate.slice(0, 7);
     if (savedMonth !== currentMonth) {
       currentMonth = savedMonth;
       await populateMonthSelect();
