@@ -50,12 +50,12 @@ const OCR = {
 
   // PASMO/Suica等の利用履歴（残高＋乗車ごとの +/- 差額）を検出し、
   // マイナス（乗車による減算）だけを合計する。チャージ（+）は経費ではないため除外。
-  // 実機のOCRでは「入/出の駅名 ¥残高 -454」のように1行にまとまって出力されることが多いため、
-  // 行全体の一致ではなく、テキスト全体から孤立した +/-数字を探す（前後が数字・カンマでないことを条件に、
-  // 電話番号やIDのハイフンなど数字に挟まれた「-」を誤検出しないようにする）。
+  // 実機のOCRでは「¥2,870-220」のように残高と差額の間の隙間が無く1つに繋がって
+  // 出力されることがあるため、¥マークを起点に「¥残高(区切り)±差額」をまとめて検出する。
+  // ¥を必須にすることで、電話番号やIDのハイフンを誤検出することもない。
   extractTransitUsage(lines) {
     const text = lines.join(' ');
-    const deltaPattern = /(?<![0-9,])([+\-－−])\s?([0-9][0-9,]{1,6})(?![0-9,])/g;
+    const deltaPattern = /[¥￥]\s*[0-9][0-9,]*\s*([+\-－−])\s*([0-9][0-9,]{1,6})(?![0-9,])/g;
     const negatives = [];
 
     for (const m of text.matchAll(deltaPattern)) {
@@ -76,50 +76,42 @@ const OCR = {
   extractPayee(lines) {
     const blacklist = /^(TEL|FAX|〒|https?:)/i;
     // タクシー・交通機関や一般的な会社/店舗名の目印になる語を優先して拾う。
+    // 確信が持てる候補が無い場合は、誤った値を入れるより空欄にして手入力してもらう方が安全。
     const companyPattern = /(タクシー|交通|ハイヤー|運輸|株式会社|有限会社|合同会社|㈱|㈲|\(株\)|（株）|\(有\)|（有）|店|センター|食堂)/;
     const candidate = lines.find(
       (l) => companyPattern.test(l) && l.length <= 30 && !blacklist.test(l) && !/^[A-Z0-9 .,'-]+$/i.test(l)
     );
-    if (candidate) return candidate.replace(/[|:：]/g, '').trim();
-    const first = lines.find((l) => l.length >= 2 && l.length <= 30 && !/^\d+$/.test(l));
-    return first || '';
+    return candidate ? candidate.replace(/[|:：]/g, '').trim() : '';
   },
 
   extractAmount(lines) {
-    // 登録番号・注文番号・電話番号などの桁数字を金額と誤認しないよう、該当行は除外する。
-    const blacklist = /(登録番号|注文番号|レシート番号|電話|TEL|ＴＥＬ|ID[:：]|ナビコード|相談室|kmグループ|問合せ|QR|営業回数)/;
+    // 登録番号・注文番号・電話番号・郵便番号などの桁数字を金額と誤認しないよう、該当行は除外する。
+    // 「T+8桁以上の数字」は登録番号のラベル文字がOCRで読み取れなかった場合の保険として、
+    // 行の内容に関わらず構造的に除外する。
+    const blacklist = /(登録番号|注文番号|レシート番号|電話|TEL|ＴＥＬ|ID[:：]|ナビコード|相談室|kmグループ|問合せ|QR|営業回数|〒|T[0-9]{8,})/;
     const usableLines = lines.filter((l) => !blacklist.test(l));
 
     const keywordPattern = /(合計|お会計|総額|ご請求額|請求金額|領収金額|税込)/;
     const yenPattern = /[¥￥]\s*([0-9][0-9,]*)/;
 
-    // Tier 1: 「合計」等のキーワード行、またはその直後1〜2行にある ¥ 付き金額。
-    for (let i = 0; i < usableLines.length; i++) {
-      if (!keywordPattern.test(usableLines[i])) continue;
-      for (let j = i; j <= i + 2 && j < usableLines.length; j++) {
-        const m = usableLines[j].match(yenPattern);
-        if (m) {
-          const value = parseInt(m[1].replace(/,/g, ''), 10);
-          if (!isNaN(value)) return value;
-        }
+    // 優先: 「合計」等のキーワードと¥金額が同じ行にある場合はそれを使う。
+    // （キーワードの後ろN行を見に行く方式は、OCRの行の並び順が入れ替わると
+    //   別の項目の金額を誤って拾ってしまうため採用しない）
+    for (const line of usableLines) {
+      if (!keywordPattern.test(line)) continue;
+      const m = line.match(yenPattern);
+      if (m) {
+        const value = parseInt(m[1].replace(/,/g, ''), 10);
+        if (!isNaN(value)) return value;
       }
     }
 
-    // Tier 2: ¥ 付き金額の中で最大のもの（内訳の中で合計が最も大きいことが多い）。
+    // それ以外: ¥ 付き金額の中で最大のもの（内訳の中では合計が最も大きいことが多い）。
     let max = null;
     for (const line of usableLines) {
       for (const m of line.matchAll(new RegExp(yenPattern, 'g'))) {
         const value = parseInt(m[1].replace(/,/g, ''), 10);
         if (!isNaN(value) && (max === null || value > max)) max = value;
-      }
-    }
-    if (max !== null) return max;
-
-    // Tier 3: ¥ が読み取れなかった場合のみ、桁数を現実的な範囲に絞って数字を拾う。
-    for (const line of usableLines) {
-      for (const m of line.matchAll(/([0-9][0-9,]{2,})/g)) {
-        const value = parseInt(m[1].replace(/,/g, ''), 10);
-        if (!isNaN(value) && value <= 999999 && (max === null || value > max)) max = value;
       }
     }
     return max;
