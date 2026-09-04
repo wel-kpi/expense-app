@@ -147,10 +147,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <label class="form-label">氏名（ファイル名・出力書類に使用）</label>
+        <label class="form-label">氏名（ファイル名用の略称）</label>
         <input type="text" class="form-control" id="settingUserName" placeholder="渡邉">
+        <label class="form-label mt-3">氏名（フルネーム・書類の氏名欄に表示）</label>
+        <input type="text" class="form-control" id="settingFullName" placeholder="渡邉　将貴">
+        <label class="form-label mt-3">社員コード</label>
+        <input type="text" class="form-control" id="settingEmployeeCode" placeholder="任意">
         <label class="form-label mt-3">会社名</label>
-        <input type="text" class="form-control" id="settingCompanyName" placeholder="株式会社〇〇">
+        <input type="text" class="form-control" id="settingCompanyName" placeholder="WELNAC 株式会社">
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-primary" id="saveSettingsBtn">保存</button>

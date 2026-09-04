@@ -339,6 +339,8 @@
       return;
     }
     const userName = await ExpenseDB.getSetting('userName', '');
+    const fullName = await ExpenseDB.getSetting('fullName', '');
+    const employeeCode = await ExpenseDB.getSetting('employeeCode', '');
     const companyName = await ExpenseDB.getSetting('companyName', '');
     if (!userName) {
       toast('設定（⚙）で氏名を入力してください', 'warning');
@@ -351,6 +353,8 @@
         expenses: currentExpenses,
         month: currentMonth,
         userName,
+        fullName,
+        employeeCode,
         companyName,
       });
       toast(`出力しました: ${fileName}`, 'success');
@@ -362,12 +366,16 @@
 
   $('settingsBtn').addEventListener('click', async () => {
     $('settingUserName').value = await ExpenseDB.getSetting('userName', '');
+    $('settingFullName').value = await ExpenseDB.getSetting('fullName', '');
+    $('settingEmployeeCode').value = await ExpenseDB.getSetting('employeeCode', '');
     $('settingCompanyName').value = await ExpenseDB.getSetting('companyName', '');
     settingsModal.show();
   });
 
   $('saveSettingsBtn').addEventListener('click', async () => {
     await ExpenseDB.setSetting('userName', $('settingUserName').value.trim());
+    await ExpenseDB.setSetting('fullName', $('settingFullName').value.trim());
+    await ExpenseDB.setSetting('employeeCode', $('settingEmployeeCode').value.trim());
     await ExpenseDB.setSetting('companyName', $('settingCompanyName').value.trim());
     settingsModal.hide();
     toast('設定を保存しました');
