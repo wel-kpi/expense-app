@@ -12,9 +12,36 @@ const OCR = {
   // Heuristic extraction of 支払先(payee) and 支払額(amount) from raw OCR text.
   extractFields(text) {
     const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+    const transit = this.extractTransitUsage(lines);
+    if (transit) return transit;
+
     return {
       payee: this.extractPayee(lines),
       amount: this.extractAmount(lines),
+    };
+  },
+
+  // PASMO/Suica等の利用履歴（残高＋乗車ごとの +/- 差額）を検出し、
+  // マイナス（乗車による減算）だけを合計する。チャージ（+）は経費ではないため除外。
+  extractTransitUsage(lines) {
+    const deltaPattern = /^[+\-－−]\s?([0-9][0-9,]{1,6})$/;
+    const negatives = [];
+
+    for (const line of lines) {
+      const m = line.match(deltaPattern);
+      if (!m) continue;
+      const value = parseInt(m[1].replace(/,/g, ''), 10);
+      if (isNaN(value)) continue;
+      if (line[0] !== '+') negatives.push(value);
+    }
+
+    // 乗車による減算が複数見つかった場合のみ「履歴形式」と判断する（誤検出防止）。
+    if (negatives.length < 3) return null;
+
+    return {
+      payee: 'PASMO/Suica',
+      amount: negatives.reduce((sum, v) => sum + v, 0),
     };
   },
 
